@@ -3,6 +3,10 @@ import { GameEngine, EngineDiagnostics } from './game3d/core/Engine';
 import { NPCInstance } from './game3d/npc/NPCManager';
 import { npcMemoryStore } from './game3d/npc/NPCMemory';
 import { gameAudio } from './game3d/core/Audio';
+import { DistrictVenue } from './game3d/world/CityDistrict';
+import { CHARACTER_PROFILES, CharacterProfile } from './game3d/player/CharacterProfiles';
+
+// UI Components
 import { GameHUD } from './components/GameHUD';
 import { MainMenu } from './components/MainMenu';
 import { PauseMenu } from './components/PauseMenu';
@@ -11,6 +15,14 @@ import { TerminalModal } from './components/TerminalModal';
 import { DiagnosticsOverlay } from './components/DiagnosticsOverlay';
 import { ExportModal } from './components/ExportModal';
 import { MobileControls3D } from './components/MobileControls3D';
+
+// Activity Modals
+import { AutoModModal } from './components/AutoModModal';
+import { NightclubModal } from './components/NightclubModal';
+import { AmmuNationModal } from './components/AmmuNationModal';
+import { HeistBoardModal } from './components/HeistBoardModal';
+import { ArcadeModal } from './components/ArcadeModal';
+import { CharacterSwitchModal } from './components/CharacterSwitchModal';
 
 export const App: React.FC = () => {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -30,6 +42,8 @@ export const App: React.FC = () => {
     text: string;
   } | null>(null);
   const [activeTerminalName, setActiveTerminalName] = useState<string | null>(null);
+  const [activeVenue, setActiveVenue] = useState<DistrictVenue | null>(null);
+  const [showCharacterSwitch, setShowCharacterSwitch] = useState<boolean>(false);
 
   // Mobile controls state
   const [isSprintingMobile, setIsSprintingMobile] = useState<boolean>(false);
@@ -43,6 +57,27 @@ export const App: React.FC = () => {
     npcCount: 5,
     stamina: 100,
     credits: 45,
+    health: 100,
+    armor: 75,
+    wantedStars: 0,
+    isDriving: false,
+    speedKmh: 0,
+    nitro: 100,
+    radioStation: 'NEON WAVE 94.7 FM',
+    activeWeapon: {
+      id: 'arc_rifle',
+      name: 'Arc-Rifle NF-7',
+      type: 'RIFLE',
+      magCapacity: 30,
+      currentMag: 30,
+      reserveAmmo: 180,
+      damage: 42,
+      fireRate: 8,
+      range: 85,
+      icon: 'rifle',
+    },
+    character: CHARACTER_PROFILES[0],
+    timeOfDay: 'NIGHT',
   });
 
   // 1. Initialize 3D Engine on mount
@@ -67,18 +102,26 @@ export const App: React.FC = () => {
       setActiveTerminalName(name);
     };
 
-    // Track pointer lock state changes
+    engine.onOpenVenue = (venue) => {
+      document.exitPointerLock?.();
+      setActiveVenue(venue);
+    };
+
+    engine.onOpenCharacterSwitch = () => {
+      document.exitPointerLock?.();
+      setShowCharacterSwitch(true);
+    };
+
     const onPointerLockChange = () => {
       setIsPointerLocked(!!document.pointerLockElement);
     };
     document.addEventListener('pointerlockchange', onPointerLockChange);
 
-    // Diagnostics polling interval
     const interval = setInterval(() => {
       if (engineRef.current) {
         setDiagnostics({ ...engineRef.current.diagnostics });
       }
-    }, 200);
+    }, 150);
 
     return () => {
       clearInterval(interval);
@@ -91,14 +134,12 @@ export const App: React.FC = () => {
   // 2. Global Keyboard Handlers (Esc, F3)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Toggle diagnostics with F3
       if (e.key === 'F3') {
         e.preventDefault();
         setShowDiagnostics((prev) => !prev);
         return;
       }
 
-      // Handle Escape key
       if (e.key === 'Escape') {
         if (activeDialogue) {
           handleCloseDialogue();
@@ -106,6 +147,14 @@ export const App: React.FC = () => {
         }
         if (activeTerminalName) {
           handleCloseTerminal();
+          return;
+        }
+        if (activeVenue) {
+          setActiveVenue(null);
+          return;
+        }
+        if (showCharacterSwitch) {
+          setShowCharacterSwitch(false);
           return;
         }
         if (showExportModal) {
@@ -123,7 +172,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, activeDialogue, activeTerminalName, showExportModal]);
+  }, [gameState, activeDialogue, activeTerminalName, activeVenue, showCharacterSwitch, showExportModal]);
 
   // Actions
   const handleStartGame = () => {
@@ -218,6 +267,22 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleSelectCharacter = (profile: CharacterProfile) => {
+    if (engineRef.current) {
+      engineRef.current.player.setCharacter(profile);
+      setDiagnostics((prev) => ({ ...prev, character: profile }));
+    }
+  };
+
+  const handleCycleTimeOfDay = () => {
+    if (!engineRef.current) return;
+    const current = engineRef.current.timeOfDay;
+    const next = current === 'NIGHT' ? 'SUNSET' : current === 'SUNSET' ? 'DAY' : 'NIGHT';
+    engineRef.current.setTimeOfDay(next);
+    setDiagnostics((prev) => ({ ...prev, timeOfDay: next }));
+    gameAudio.playInteract();
+  };
+
   // Mobile Virtual input bridge
   const handleMobileMoveStart = (forward: number, strafe: number) => {
     if (engineRef.current) {
@@ -237,7 +302,11 @@ export const App: React.FC = () => {
 
   const handleMobileInteract = () => {
     if (!engineRef.current) return;
-    if (engineRef.current.currentInteractableNPC) {
+    if (engineRef.current.currentInteractableVenue) {
+      const venue = engineRef.current.currentInteractableVenue;
+      gameAudio.playInteract();
+      setActiveVenue(venue);
+    } else if (engineRef.current.currentInteractableNPC) {
       const npc = engineRef.current.currentInteractableNPC;
       engineRef.current.setDialogueActive(npc.data.id);
       const text = npc.interact();
@@ -247,6 +316,8 @@ export const App: React.FC = () => {
       gameAudio.playInteract();
       engineRef.current.player.credits += 15;
       setActiveTerminalName(term.name);
+    } else if (engineRef.current.currentInteractableVehicle || engineRef.current.player.isDriving) {
+      engineRef.current.player.onToggleVehicle?.();
     }
   };
 
@@ -276,6 +347,8 @@ export const App: React.FC = () => {
             showDiagnostics={showDiagnostics}
             isPointerLocked={isPointerLocked}
             onRequestPointerLock={handleRequestPointerLock}
+            onOpenCharacterSwitch={() => setShowCharacterSwitch(true)}
+            onCycleTimeOfDay={handleCycleTimeOfDay}
           />
 
           {/* Mobile Touch Controls for small screens */}
@@ -307,6 +380,80 @@ export const App: React.FC = () => {
           onOpenExport={() => setShowExportModal(true)}
           onReturnToMainMenu={() => setGameState('MENU')}
           onResetMemories={handleResetMemories}
+        />
+      )}
+
+      {/* Venue Modals */}
+      {activeVenue?.type === 'GARAGE' && (
+        <AutoModModal
+          vehicle={engineRef.current?.vehicleManager.vehicles[0] || null}
+          playerCredits={diagnostics.credits}
+          onUpdateCredits={handleUpdateCredits}
+          onClose={() => setActiveVenue(null)}
+        />
+      )}
+
+      {activeVenue?.type === 'NIGHTCLUB' && (
+        <NightclubModal onClose={() => setActiveVenue(null)} />
+      )}
+
+      {activeVenue?.type === 'AMMUNATION' && engineRef.current && (
+        <AmmuNationModal
+          combatSystem={engineRef.current.combatSystem}
+          playerCredits={diagnostics.credits}
+          onUpdateCredits={handleUpdateCredits}
+          onClose={() => setActiveVenue(null)}
+        />
+      )}
+
+      {activeVenue?.type === 'HEIST' && (
+        <HeistBoardModal
+          playerCredits={diagnostics.credits}
+          onAddCredits={handleAddCredits}
+          onClose={() => setActiveVenue(null)}
+        />
+      )}
+
+      {activeVenue?.type === 'ARCADE' && (
+        <ArcadeModal
+          playerCredits={diagnostics.credits}
+          onAddCredits={handleAddCredits}
+          onClose={() => setActiveVenue(null)}
+        />
+      )}
+
+      {activeVenue?.type === 'YACHT' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 font-mono select-none">
+          <div className="relative w-full max-w-xl bg-[#091526] border-2 border-[#00f2fe] rounded-2xl p-6 shadow-2xl text-center space-y-4">
+            <h2 className="text-xl font-bold text-white tracking-widest">
+              MEGAIATE DE LUXO <span className="text-[#00f2fe]">NEON HORIZON</span>
+            </h2>
+            <p className="text-xs text-[#8cb4db] leading-relaxed">
+              Você embarcou no deck panorâmico do megaiate ancorado na baía de Neon Frontier. Acesso ao
+              jacuzzi VIP, heliponto e vista deslumbrante do skyline noturno da metrópole.
+            </p>
+            <div className="p-3 rounded-xl bg-[#10233b] border border-[#1e3c63] text-xs text-[#ffd166] font-bold">
+              +50 Créditos VIP de Fidelidade Concedidos!
+            </div>
+            <button
+              onClick={() => {
+                handleAddCredits(50);
+                setActiveVenue(null);
+              }}
+              className="px-6 py-2.5 rounded-xl bg-[#00f2fe] hover:bg-[#38f5ff] text-black font-extrabold text-xs cursor-pointer"
+            >
+              RETORNAR AO PORTO
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Character Switcher Modal */}
+      {showCharacterSwitch && (
+        <CharacterSwitchModal
+          currentProfile={diagnostics.character}
+          onSelectProfile={handleSelectCharacter}
+          onClose={() => setShowCharacterSwitch(false)}
         />
       )}
 
@@ -348,4 +495,5 @@ export const App: React.FC = () => {
     </div>
   );
 };
+
 export default App;

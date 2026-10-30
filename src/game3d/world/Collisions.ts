@@ -69,4 +69,31 @@ export class CollisionSystem {
 
     return resolved;
   }
+
+  // Sphere collision resolution that pushes out of intersecting AABBs
+  public resolveSphereCollision(pos: THREE.Vector3, radius: number): THREE.Vector3 {
+    const resolved = pos.clone();
+    for (let i = 0; i < this.obstacles.length; i++) {
+      const box = this.obstacles[i];
+      if (resolved.y + radius < box.min.y || resolved.y > box.max.y) continue;
+
+      const closestX = Math.max(box.min.x, Math.min(resolved.x, box.max.x));
+      const closestZ = Math.max(box.min.z, Math.min(resolved.z, box.max.z));
+
+      const dx = resolved.x - closestX;
+      const dz = resolved.z - closestZ;
+      const dist = Math.hypot(dx, dz);
+
+      if (dist < radius) {
+        if (dist > 0.001) {
+          const push = (radius - dist);
+          resolved.x += (dx / dist) * push;
+          resolved.z += (dz / dist) * push;
+        } else {
+          resolved.x += radius;
+        }
+      }
+    }
+    return resolved;
+  }
 }
