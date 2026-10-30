@@ -1,6 +1,6 @@
 {
-  "name": "NEON FRONTIER",
-  "description": "Jogo original de exploração urbana 2D em metrópole neon, coleta de recursos, construção, NPCs com memória e veículos.",
+  "name": "NEON FRONTIER 3D",
+  "description": "Jogo 3D independente de exploração urbana em terceira pessoa com Three.js, controles responsivos, inteligência comportamental e memória persistente de NPCs.",
   "permissions": [],
   "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
