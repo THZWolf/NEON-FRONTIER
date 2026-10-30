@@ -1,0 +1,6 @@
+{
+  "name": "NEON FRONTIER",
+  "description": "Jogo original de exploração urbana 2D em metrópole neon, coleta de recursos, construção, NPCs com memória e veículos.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
