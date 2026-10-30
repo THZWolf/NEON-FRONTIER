@@ -115,7 +115,11 @@ export const App: React.FC = () => {
     const onPointerLockChange = () => {
       setIsPointerLocked(!!document.pointerLockElement);
     };
+    const onPointerLockError = () => {
+      setIsPointerLocked(false);
+    };
     document.addEventListener('pointerlockchange', onPointerLockChange);
+    document.addEventListener('pointerlockerror', onPointerLockError);
 
     const interval = setInterval(() => {
       if (engineRef.current) {
@@ -126,6 +130,7 @@ export const App: React.FC = () => {
     return () => {
       clearInterval(interval);
       document.removeEventListener('pointerlockchange', onPointerLockChange);
+      document.removeEventListener('pointerlockerror', onPointerLockError);
       engine.dispose();
       engineRef.current = null;
     };
@@ -240,17 +245,11 @@ export const App: React.FC = () => {
     setActiveDialogue(null);
     if (engineRef.current) {
       engineRef.current.setDialogueActive(null);
-      if (canvasContainerRef.current && gameState === 'PLAYING') {
-        engineRef.current.player.requestPointerLock(canvasContainerRef.current);
-      }
     }
   };
 
   const handleCloseTerminal = () => {
     setActiveTerminalName(null);
-    if (canvasContainerRef.current && gameState === 'PLAYING' && engineRef.current) {
-      engineRef.current.player.requestPointerLock(canvasContainerRef.current);
-    }
   };
 
   const handleUpdateCredits = (newAmount: number) => {

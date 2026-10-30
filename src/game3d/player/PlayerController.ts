@@ -207,6 +207,10 @@ export class PlayerController {
       this.isPointerLocked = !!document.pointerLockElement;
     });
 
+    document.addEventListener('pointerlockerror', () => {
+      this.isPointerLocked = false;
+    });
+
     window.addEventListener('mousedown', (e) => {
       if (e.button === 0) {
         this.isMouseDown = true;
@@ -266,8 +270,19 @@ export class PlayerController {
     });
   }
 
-  public requestPointerLock(element: HTMLElement) {
-    element.requestPointerLock?.();
+  public requestPointerLock(element: HTMLElement | null) {
+    if (!element) return;
+    try {
+      const res = element.requestPointerLock?.();
+      // Modern browsers return a Promise that rejects if user gesture is absent
+      if (res && typeof (res as Promise<void>).catch === 'function') {
+        (res as Promise<void>).catch(() => {
+          // Gracefully ignore rejected pointer lock requests without throwing uncaught exceptions
+        });
+      }
+    } catch {
+      // Gracefully ignore synchronous gesture / security exceptions
+    }
   }
 
   public resetPosition(x = 0, y = 0, z = 8) {
